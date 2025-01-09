@@ -34,8 +34,6 @@ Watch the application in action:
 ![Project Demo - Image 3](https://files.catbox.moe/eidbos.jpg)
 
 
-[Click here to view the demo](video/sample.mp4) 
-
 
 ---
 
@@ -43,5 +41,5 @@ Watch the application in action:
 
 1. *Clone the Repository*
    ```bash
-   git clone https://github.com/your-username/route-optimizer.git
-   cd route-optimizer
+   https://github.com/kaz004/DYNAMIC-ROUTE-OPTIMIZOR.git
+   cd DYNAMIC-ROUTE-OPTIMIZOR
