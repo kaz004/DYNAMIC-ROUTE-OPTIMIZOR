@@ -1,4 +1,4 @@
-# DYNAMIC-ROUTE-OPTIMIZOR
+# DYNAMIC-ROUTE-OPTIMIZER
 # Route Optimization Flask Application
 
 ## Demo Video
