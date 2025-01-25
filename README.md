@@ -4,8 +4,7 @@
 ## Demo Video
 
 
-![Watch Demo Video](https://files.catbox.moe/rhwy5p.mp4)
-
+[Watch the Video](https://files.catbox.moe/rhwy5p.mp4)
 
 
 
