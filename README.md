@@ -4,7 +4,7 @@
 ## Demo Video
 
 
-<!-- Uploading "Recording 2025-01-25 091323.mp4"... -->
+![Watch Demo Video](https://files.catbox.moe/rhwy5p.mp4)
 
 
 
