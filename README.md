@@ -4,7 +4,7 @@
 ## Demo Video
 
 
-![Watch Demo Video](https://github.com/user-attachments/assets/02d17a3c-66f4-4f73-928b-a757dfd3e9cb)
+![Watch Demo Video](https://files.catbox.moe/rhwy5p.mp4)
 
 
 
