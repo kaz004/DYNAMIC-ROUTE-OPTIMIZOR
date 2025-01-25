@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useMediaQuery } from "react-responsive";
 import PropTypes from "prop-types";
 
-const MapComponent = ({ routeData, start, end, index }) => {
-  const mapRef = useRef(null);
+const MapComponent = ({ routeData, index }) => {
+  const mapRef = React.useRef(null);
 
   useEffect(() => {
     if (!mapRef.current || !window.google) return;
@@ -59,8 +59,6 @@ MapComponent.propTypes = {
     duration: PropTypes.number.isRequired,
     polyline: PropTypes.string.isRequired,
   }).isRequired,
-  start: PropTypes.string.isRequired,
-  end: PropTypes.string.isRequired,
   index: PropTypes.number,
 };
 
@@ -73,7 +71,10 @@ const RouteInfo = ({ routeData, emissions, weather, airQuality, start, end, inde
       <p><strong>Distance:</strong> {(routeData.distance / 1000).toFixed(2)} km</p>
       <p><strong>Duration:</strong> {(routeData.duration / 60).toFixed(2)} minutes</p>
       <p><strong>Emissions:</strong> {emissions.toFixed(2)} g CO2</p>
-      <p><strong>Weather:</strong> {weather.temperature.toFixed(2)}°C, Wind: {weather.wind_speed.toFixed(2)} km/h, Humidity: {weather.humidity}%</p>
+      <p>
+        <strong>Weather:</strong> {weather.temperature.toFixed(2)}°C, Wind: {weather.wind_speed.toFixed(2)} km/h,
+        Humidity: {weather.humidity}%
+      </p>
       <p><strong>Air Quality Index:</strong> {airQuality}</p>
       <p><strong>Package Weight:</strong> {packageWeight} kg</p>
     </div>
@@ -112,37 +113,26 @@ const App = () => {
   const isMobile = useMediaQuery({ maxWidth: 767 });
 
   useEffect(() => {
-    const loadGoogleMapsScript = () => {
+    if (!window.google) {
       const script = document.createElement("script");
       script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places,geometry`;
       script.async = true;
       document.body.appendChild(script);
-    };
-
-    if (!window.google) {
-      loadGoogleMapsScript();
     }
   }, []);
 
   const handleOptimizeRoute = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      const response = await axios.post("http://localhost:5000/optimize_route", {
-        start,
-        end,
-        vehicle_type: vehicleType,
-        package_weight: packageWeight,
-      });
-
-      setRoute(response.data);
-    } catch (error) {
-      setError(
-        axios.isAxiosError(error)
-          ? error.response?.data?.error || error.message || "An error occurred while optimizing the route."
-          : "An unexpected error occurred."
+      const response = await axios.post(
+        "http://localhost:5000/optimize_route",
+        { start, end, vehicle_type: vehicleType, package_weight: packageWeight },
+        { headers: { "Content-Type": "application/json", Accept: "application/json" } }
       );
+      setRoute(response.data);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "An error occurred while optimizing the route.");
     } finally {
       setLoading(false);
     }
@@ -153,14 +143,15 @@ const App = () => {
       <h1 className="text-5xl font-bold text-center text-gray-100 mb-8">FedEx Smart Route Optimizer</h1>
       <div className="max-w-6xl mx-auto p-6 bg-gray-800 bg-opacity-70 backdrop-blur-md rounded-xl shadow-lg space-y-8">
         <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-8`}>
+          {/* Start and End Locations */}
           <div>
             <label className="block text-lg font-medium text-gray-300">Start Location</label>
             <input
               type="text"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="mt-2 block w-full border border-gray-600 rounded-md p-4 text-lg text-gray-100 bg-gray-700 focus:ring-teal-600 focus:border-teal-600 hover:bg-gray-600 transition duration-200"
               placeholder="Enter start location"
+              className="input-style"
             />
           </div>
           <div>
@@ -169,22 +160,25 @@ const App = () => {
               type="text"
               value={end}
               onChange={(e) => setEnd(e.target.value)}
-              className="mt-2 block w-full border border-gray-600 rounded-md p-4 text-lg text-gray-100 bg-gray-700 focus:ring-teal-600 focus:border-teal-600 hover:bg-gray-600 transition duration-200"
               placeholder="Enter end location"
+              className="input-style"
             />
           </div>
         </div>
+        {/* Other Inputs */}
         <div>
           <label className="block text-lg font-medium text-gray-300">Vehicle Type</label>
           <select
             value={vehicleType}
             onChange={(e) => setVehicleType(e.target.value)}
-            className="mt-2 block w-full border border-gray-600 rounded-md p-4 text-lg text-gray-100 bg-gray-700 focus:ring-teal-600 focus:border-teal-600 hover:bg-gray-600 transition duration-200"
+            className="input-style"
           >
-            <option value="car">Car</option>
+            <option value="car">Driving</option>
+            <option value="flying">Flying</option>
+            <option value="public-transport">Public Transport</option>
             <option value="truck">Truck</option>
             <option value="van">Van</option>
-            <option value="electric">Electric Vehicle</option>
+            <option value="bike">Bike</option>
           </select>
         </div>
         <div>
@@ -193,10 +187,11 @@ const App = () => {
             type="number"
             value={packageWeight}
             onChange={(e) => setPackageWeight(Number(e.target.value))}
-            className="mt-2 block w-full border border-gray-600 rounded-md p-4 text-lg text-gray-100 bg-gray-700 focus:ring-teal-600 focus:border-teal-600 hover:bg-gray-600 transition duration-200"
             placeholder="Enter package weight in kg"
+            className="input-style"
           />
         </div>
+        {/* Optimize Button */}
         <button
           onClick={handleOptimizeRoute}
           disabled={loading}
@@ -205,6 +200,7 @@ const App = () => {
           {loading ? "Optimizing..." : "Optimize Route"}
         </button>
 
+        {/* Error Display */}
         {error && (
           <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md">
             <p className="font-semibold">Error:</p>
@@ -212,6 +208,7 @@ const App = () => {
           </div>
         )}
 
+        {/* Route Display */}
         {route && (
           <div className="space-y-8">
             <button
@@ -220,10 +217,9 @@ const App = () => {
             >
               {showBestRoute ? "Show Alternative Routes" : "Show Best Route"}
             </button>
-
             {showBestRoute ? (
               <div>
-                <MapComponent routeData={route.route.best_route} start={start} end={end} index={null} />
+                <MapComponent routeData={route.route.best_route} index={null} />
                 <RouteInfo
                   routeData={route.route.best_route}
                   emissions={route.emissions}
@@ -238,7 +234,7 @@ const App = () => {
             ) : (
               route.route.other_routes.map((otherRoute, index) => (
                 <div key={index}>
-                  <MapComponent routeData={otherRoute.route} start={start} end={end} index={index} />
+                  <MapComponent routeData={otherRoute.route} index={index} />
                   <RouteInfo
                     routeData={otherRoute.route}
                     emissions={route.alternative_routes[index].emissions}
