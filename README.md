@@ -30,8 +30,9 @@ The *Route Optimization Flask Application* is a backend service designed to prov
 Watch the application in action:
 
 ![Project Demo - Image 1](https://files.catbox.moe/uf5dn1.png)
-![Project Demo - Image 2](https://files.catbox.moe/qwoce5.jpg)
-![Project Demo - Image 3](https://files.catbox.moe/eidbos.jpg)
+![Project Demo - Image 2](https://files.catbox.moe/95fcoh.png)
+![Project Demo - Image 3](https://files.catbox.moe/jzn3ww.png)
+![Project Demo - Image 4](https://files.catbox.moe/2w70ef.png)
 
 
 
