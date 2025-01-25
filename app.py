@@ -4,24 +4,25 @@ import requests
 import logging
 import json
 import traceback
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+import http.client
+
+# Load sensitive data securely from environment variables
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Logging configuration
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 class RouteOptimizer:
     def __init__(self):
-        # API keys are loaded from environment variables for security
         self.google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
         self.aqicn_api_key = os.getenv("AQICN_API_KEY")
         self.openweathermap_api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-
-        if not all([self.google_maps_api_key, self.aqicn_api_key, self.openweathermap_api_key]):
-            raise ValueError("Missing one or more required API keys. Please set environment variables.")
+        self.rapidapi_key = os.getenv("RAPIDAPI_KEY")
 
     def get_routes(self, start, end):
         url = "https://maps.googleapis.com/maps/api/directions/json"
@@ -33,8 +34,11 @@ class RouteOptimizer:
         }
         response = requests.get(url, params=params)
         data = response.json()
+        app.logger.debug(f"Google Maps API response: {data}")
+
         if 'routes' not in data:
             raise ValueError("No routes found in Google Maps API response")
+
         return [self.parse_route(route) for route in data['routes']]
 
     def parse_route(self, route):
@@ -48,8 +52,10 @@ class RouteOptimizer:
     def compare_routes(self, routes):
         def heuristic(route):
             return route['duration'] + route['distance'] / 100
+
         scored_routes = [(route, heuristic(route)) for route in routes]
         best_route = min(scored_routes, key=lambda x: x[1])
+
         other_routes = [
             {
                 "route": route,
@@ -57,12 +63,13 @@ class RouteOptimizer:
             }
             for route, score in scored_routes if route != best_route[0]
         ]
+
         return {
             "best_route": best_route[0],
             "other_routes": other_routes
         }
 
-    def get_route(self, start, end, vehicleType, package_weight):
+    def get_route(self, start, end, vehicle_type, package_weight):
         routes = self.get_routes(start, end)
         compared_routes = self.compare_routes(routes)
         best_route = compared_routes['best_route']
@@ -73,12 +80,14 @@ class RouteOptimizer:
         weather_data = self.get_weather_data(start_coords)
         air_quality = self.get_air_quality(start_coords)
 
-        best_route_emissions = self.calculate_emissions(best_route, vehicleType, weather_data, air_quality, package_weight)
+        # Calculate emissions for the best route
+        best_route_emissions = self.calculate_emissions(start, end, best_route, vehicle_type, package_weight)
 
+        # Calculate emissions for alternative routes
         alternative_routes = []
         for alt_route_data in compared_routes['other_routes']:
             alt_route = alt_route_data['route']
-            alt_emissions = self.calculate_emissions(alt_route, vehicleType, weather_data, air_quality, package_weight)
+            alt_emissions = self.calculate_emissions(start, end, alt_route, vehicle_type, package_weight)
             alternative_routes.append({
                 'route': alt_route,
                 'emissions': alt_emissions
@@ -129,20 +138,77 @@ class RouteOptimizer:
         data = response.json()
         return data['data']['aqi']
 
-    def calculate_emissions(self, route, vehicle_type, weather, air_quality, package_weight):
+    def calculate_emissions(self, start, end, route, vehicle_type, package_weight):
+        if vehicle_type in ["car", "flying", "public-transport"]:
+            api_emissions = self.calculate_api_emissions(start, end, vehicle_type)
+            if api_emissions is not None:
+                return api_emissions
+            else:
+                app.logger.warning(f"Falling back to original calculation method for {vehicle_type}")
+
+        return self.calculate_other_vehicle_emissions(route, vehicle_type, package_weight)
+
+    def calculate_api_emissions(self, start, end, vehicle_type):
+        conn = http.client.HTTPSConnection("travel-co2-climate-carbon-emissions.p.rapidapi.com")
+
+        payload = json.dumps({
+            "from": start,
+            "to": end,
+            "ways": 1,
+            "people": 1,
+            "language": "en",
+            "title": f"Carbon emissions from {start} to {end}",
+            "transport_types": [vehicle_type]
+        })
+
+        headers = {
+            'x-rapidapi-key': self.rapidapi_key,
+            'x-rapidapi-host': "travel-co2-climate-carbon-emissions.p.rapidapi.com",
+            'Content-Type': "application/json"
+        }
+
+        try:
+            conn.request("POST", "/api/v1/simpletrips", payload, headers)
+            res = conn.getresponse()
+            data = res.read().decode("utf-8")
+
+            app.logger.debug(f"API Response: {data}")
+
+            json_data = json.loads(data)
+
+            if 'trips' in json_data and len(json_data['trips']) > 0:
+                return json_data['trips'][0]['co2e']
+            else:
+                app.logger.warning(f"Unexpected API response format: {json_data}")
+                return None
+        except json.JSONDecodeError as e:
+            app.logger.error(f"JSON decoding error: {str(e)}")
+            return None
+        except Exception as e:
+            app.logger.error(f"Error in API call: {str(e)}")
+            return None
+
+    def calculate_other_vehicle_emissions(self, route, vehicle_type, package_weight):
         base_emission_rate = {
             "car": 120,
             "truck": 300,
             "van": 200,
-            "electric": 0,
+            "bike": 0,
+            "flying": 250,
+            "public-transport": 50,
         }
+
         distance_km = route['distance'] / 1000
         base_emissions = base_emission_rate.get(vehicle_type, 150) * distance_km
 
         weight_factor = 1 + (package_weight * 0.01)
-        weather_factor = 1 + (weather['temperature'] - 20) * 0.02 + weather['humidity'] * 0.0015 + weather['wind_speed'] * 0.005
-        aqi_factor = 1 + (air_quality - 50) * 0.003
-        total_emissions = base_emissions * weather_factor * aqi_factor * weight_factor
+        total_emissions = base_emissions * weight_factor
+
+        app.logger.debug(f"Vehicle type: {vehicle_type}")
+        app.logger.debug(f"Distance: {distance_km} km")
+        app.logger.debug(f"Base emissions: {base_emissions}g CO2")
+        app.logger.debug(f"Weight factor: {weight_factor}")
+        app.logger.debug(f"Total emissions: {total_emissions}g CO2")
 
         return total_emissions
 
@@ -174,4 +240,4 @@ def optimize_route():
         return jsonify({"error": "An unexpected error occurred. Please try again later."}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
